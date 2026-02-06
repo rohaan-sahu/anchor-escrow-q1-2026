@@ -116,7 +116,7 @@ impl<'info> Take<'info> {
 
         transfer_checked(
             cpi_context_x_to_taker,
-            self.vault.to_account_info().lamports(),
+            self.vault.amount,
             self.mint_x.decimals
         )?;
 
@@ -124,7 +124,7 @@ impl<'info> Take<'info> {
     }
 }
 
-// Saw this error whilr building
+// Saw this error while building
 // Used 'claud' chat to find a solution
 // Using Box was it's suggestion
 

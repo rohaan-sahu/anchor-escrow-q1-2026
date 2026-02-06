@@ -67,7 +67,13 @@ impl<'info> Refund<'info> {
         };
 
         let salt_seed_bytes = seed.to_le_bytes();
-        let cpi_seed_signer:&[&[&[u8]]] = &[&[b"escrow",self.maker.to_account_info().key.as_ref(),salt_seed_bytes.as_ref()]];
+        let cpi_seed_signer:&[&[&[u8]]] = &[&[
+            b"escrow",
+            self.maker.to_account_info().key.as_ref(),
+            salt_seed_bytes.as_ref(),
+            &[self.escrow.bump]
+        ]];
+
 
         let cpi_context = CpiContext::new_with_signer(
             self.token_program.to_account_info(),
