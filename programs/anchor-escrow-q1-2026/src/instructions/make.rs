@@ -51,9 +51,9 @@ pub struct Make<'info> {
     )]
     pub escrow: Account<'info,Escrow>,
 
-    /// We can't have 'associated_token' constraint & 'seed' constarint together.
-    /// This is prpbably a safety check, because an ATA is a PDA by design.
-    /// Hence the setup below is wrong.
+    // We can't have 'associated_token' constraint & 'seed' constarint together.
+    // This is prpbably a safety check, because an ATA is a PDA by design.
+    // Hence the setup below is wrong.
     // #[account(
     //     init,
     //     payer = maker,
@@ -72,8 +72,8 @@ pub struct Make<'info> {
         init,
         payer = maker,
         associated_token::mint = mint_x,
-        associated_token::authority = maker,
-        associated_token::token_program = token_program,
+        associated_token::authority  = escrow,
+        associated_token::token_program = token_program
     )]
     pub vault: InterfaceAccount<'info,TokenAccount>,
 }

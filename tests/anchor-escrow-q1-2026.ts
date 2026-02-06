@@ -15,8 +15,6 @@ import {
  } from "@solana/spl-token";
 
  import TAKER_ADDRESS from '../keypairs/taker_keypair_1.json';
- import MINT_X_ADDRESS from '../keypairs/mint_x_keypair_1.json';
- import MINT_Y_ADDRESS from '../keypairs/mint_y_keypair_1.json';
 
 describe("anchor_escrow_q1_2026", () => {
 
@@ -36,11 +34,8 @@ describe("anchor_escrow_q1_2026", () => {
 
   let makerAtaY: anchor.web3.PublicKey;
   let takerAtaY: anchor.web3.PublicKey;
-
-  const seed = new anchor.BN(1234);
-  let escrowPda: anchor.web3.PublicKey;
-  let escrowBump: number;
-  let vault: anchor.web3.PublicKey;
+  
+  let vaultAddress: anchor.web3.PublicKey;
 
   const depositAmount = 100;
   const receiveAmount = 200;
@@ -49,7 +44,6 @@ describe("anchor_escrow_q1_2026", () => {
     // Airdrop SOL to maker and taker
     await provider.connection.requestAirdrop(maker.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
     await provider.connection.requestAirdrop(taker.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Create mints (decimals=0 for simplicity)
     mintX = await createMint(
@@ -58,7 +52,6 @@ describe("anchor_escrow_q1_2026", () => {
       maker.publicKey,
       null,
       0,
-      anchor.web3.Keypair.fromSecretKey(new Uint8Array(MINT_X_ADDRESS))
     );
 
     mintY = await createMint(
@@ -66,54 +59,33 @@ describe("anchor_escrow_q1_2026", () => {
       maker,
       taker.publicKey,
       null,
-      0,
-      anchor.web3.Keypair.fromSecretKey(new Uint8Array(MINT_Y_ADDRESS))
+      0
     );
 
-    // Create ATAs and mint tokens
-    // makerAtaX = await getOrCreateAssociatedTokenAccount(
-    //   provider.connection,
-    //   maker,
-    //   mintX,
-    //   maker.publicKey
-    // );
-
-    const newMakerAtaX = await getOrCreateAssociatedTokenAccount(
+    //Create ATAs and mint tokens
+    const makerAtaXAccount = await getOrCreateAssociatedTokenAccount(
       provider.connection,
       maker,
       mintX,
       maker.publicKey
     );
 
-    console.log("New ATA:",newMakerAtaX);
-
-    // const makerAtaXTx = new anchor.web3.Transaction().add(
-    //   createAssociatedTokenAccountInstruction(
-    //     maker.publicKey,
-    //     makerAtaX,
-    //     maker.publicKey,
-    //     mintX
-    //   )
-    // );
-    // await provider.sendAndConfirm(makerAtaXTx);
-
-    await new Promise(resolve => setTimeout(resolve,2000));
+    makerAtaX = makerAtaXAccount.address;
     
     await mintTo(
       provider.connection,
       maker,
       mintX,
-      newMakerAtaX.address,
+      makerAtaX,
       maker,
       depositAmount * 2
     ).then(
       async() => {
-        const balanceX = await provider.connection.getTokenAccountBalance(makerAtaX);
-        console.log("makerAaX: ",balanceX);
+        const X = await provider.connection.getTokenAccountBalance(makerAtaX);
+        console.log("makerAaX: ",X.value.amount);
       }
-    )
+    );
 
-    await new Promise(resolve => setTimeout(resolve,1000));
 
     takerAtaY = getAssociatedTokenAddressSync(mintY, taker.publicKey);
     const takerAtaYTx = new anchor.web3.Transaction().add(
@@ -127,19 +99,26 @@ describe("anchor_escrow_q1_2026", () => {
 
   it("Makes and refunds the escrow", async () => {
     const seed1 = new anchor.BN(1111);
-    [escrowPda, escrowBump] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), maker.publicKey.toBuffer(), seed1.toArrayLike(Buffer, "le", 8)],
+    
+    const escrow_seed = [Buffer.from("escrow"),maker.publicKey.toBuffer(),seed1.toArrayLike(Buffer,"le",8)];
+    const [escrowAddress1, escrowBump1] = anchor.web3.PublicKey.findProgramAddressSync(
+      escrow_seed,
       program.programId
     );
-    vault = getAssociatedTokenAddressSync(mintX, escrowPda, true);
+
+    const vaultAddress1 = getAssociatedTokenAddressSync(
+      mintX,
+      escrowAddress1,
+      true
+    )
 
     console.log(`
-      maker:\t\t${maker.publicKey.toBase58()},
-      mint_X:\t\t${mintX.toBase58()},
-      mint_Y:\t\t${mintY.toBase58()},
-      maker_ATA_X:\t${makerAtaX.toBase58()},
-      escrow_pda:\t${escrowPda.toBase58()},
-      vault:\t\t${vault.toBase58()}
+      maker:\t\t${maker.publicKey.toString()},
+      mint_X:\t\t${mintX.toString()},
+      mint_Y:\t\t${mintY.toString()},
+      maker_ATA_X:\t${makerAtaX.toString()},
+      escrow_pda:\t${escrowAddress1.toString()},
+      vault:\t\t${vaultAddress1.toString()}
     }`
     );
 
@@ -154,47 +133,46 @@ describe("anchor_escrow_q1_2026", () => {
         mintX: mintX,
         mintY: mintY,
         makerAtaX: makerAtaX,
-        escrow: escrowPda,
-        vault: vault,
+        escrow: escrowAddress1,
+        vault: vaultAddress1,
       })
       .signers([maker])
       .rpc();
     
 
-    const escrowAccount = await program.account.escrow.fetch(escrowPda);
-    assert.strictEqual(escrowAccount.maker.toBase58(),maker.publicKey.toBase58());
-    assert.strictEqual(escrowAccount.mintX.toBase58(),mintX.toBase58());
-    assert.strictEqual(escrowAccount.mintY.toBase58(),mintY.toBase58());
+    const escrowAccount = await program.account.escrow.fetch(escrowAddress1);
+    assert.strictEqual(escrowAccount.maker.toString(),maker.publicKey.toString());
+    assert.strictEqual(escrowAccount.mintX.toString(),mintX.toString());
+    assert.strictEqual(escrowAccount.mintY.toString(),mintY.toString());
     assert.strictEqual(escrowAccount.receive.toNumber(),receiveAmount);
-    assert.strictEqual(escrowAccount.bump,escrowBump);
+    assert.strictEqual(escrowAccount.bump,escrowBump1);
 
-    const vaultBalance = (await provider.connection.getTokenAccountBalance(vault)).value.uiAmount;
+    const vaultBalance = (await provider.connection.getTokenAccountBalance(vaultAddress1)).value.uiAmount;
     assert.strictEqual(vaultBalance,depositAmount);
 
     // Refund
-    /*
     await program.methods
       .refund(seed1)
       .accountsStrict({
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         maker: maker.publicKey,
         mintX,
         mintY,
         makerAtaX,
-        escrow: escrowPda,
-        vault,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        escrow: escrowAddress1,
+        vault: vaultAddress1,
       })
       .rpc();
 
     // Check closed
-    const escrowInfo = await provider.connection.getAccountInfo(escrowPda);
+    const escrowInfo = await provider.connection.getAccountInfo(escrowAddress1);
     //assert.strictEqual(escrowInfo,null);
 
-    const vaultInfo = await provider.connection.getAccountInfo(vault);
+    const vaultInfo = await provider.connection.getAccountInfo(vaultAddress1);
     //assert.strictEqual(vaultInfo,null);
-    */
+    
   });
 
   /*

@@ -27,6 +27,7 @@ pub struct Refund<'info> {
     pub mint_y: InterfaceAccount<'info,Mint>,
 
     #[account(
+        mut,
         associated_token::mint = mint_x,
         associated_token::authority  = maker,
         associated_token::token_program = token_program
@@ -46,6 +47,7 @@ pub struct Refund<'info> {
     pub escrow: Account<'info,Escrow>,
 
     #[account(
+        mut,
         associated_token::mint = mint_x,
         associated_token::authority = escrow,
         associated_token::token_program = token_program,
@@ -60,7 +62,7 @@ impl<'info> Refund<'info> {
         let transfer_accounts = TransferChecked {
             from: self.vault.to_account_info(),
             mint: self.mint_x.to_account_info(),
-            to: self.maker.to_account_info(),
+            to: self.maker_ata_x.to_account_info(),
             authority: self.escrow.to_account_info()
         };
 
@@ -73,8 +75,9 @@ impl<'info> Refund<'info> {
             cpi_seed_signer
         );
 
-        transfer_checked(cpi_context,
-            self.maker_ata_x.to_account_info().lamports(),
+        transfer_checked(
+            cpi_context,
+            self.vault.amount,
             self.mint_x.decimals
         )
     }
