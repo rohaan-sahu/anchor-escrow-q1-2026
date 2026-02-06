@@ -1,0 +1,137 @@
+use anchor_lang::prelude::*;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{
+        TokenAccount,
+        TokenInterface,
+        Mint,
+        TransferChecked,
+        transfer_checked
+    }
+};
+
+use crate::Escrow;
+
+#[derive(Accounts)]
+#[instruction(seed: u64)]
+pub struct Take<'info> {
+    pub system_program: Program<'info,System>,
+    pub associated_token_program: Program<'info,AssociatedToken>,
+    pub token_program: Interface<'info,TokenInterface>,
+
+    #[account(mut)]
+    pub taker: Signer<'info>,
+    pub maker: SystemAccount<'info>,
+
+    #[account(mint::token_program = token_program)]
+    pub mint_x: InterfaceAccount<'info,Mint>,
+    #[account(mint::token_program = token_program)]
+    pub mint_y: InterfaceAccount<'info,Mint>,
+
+
+    #[account(
+        mut,
+        associated_token::mint = mint_x,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_x: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        init_if_needed,
+        payer = taker,
+        associated_token::mint = mint_x,
+        associated_token::authority = taker,
+        associated_token::token_program = token_program
+    )]
+    pub taker_ata_x: InterfaceAccount<'info,TokenAccount>,
+
+    #[account(
+        init_if_needed,
+        payer = taker,
+        associated_token::mint = mint_y,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub maker_ata_y: InterfaceAccount<'info,TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = mint_x,
+        associated_token::authority = maker,
+        associated_token::token_program = token_program
+    )]
+    pub taker_ata_y: InterfaceAccount<'info,TokenAccount>,
+
+
+    #[account(
+        seeds = [
+            b"escrow",
+            maker.key().as_ref(),
+            seed.to_le_bytes().as_ref()
+            ],
+        bump = escrow.bump,
+    )]
+    pub escrow: Account<'info,Escrow>,
+
+    #[account(
+        associated_token::mint = mint_x,
+        associated_token::authority = escrow,
+        associated_token::token_program = token_program,
+    )]
+    pub vault: InterfaceAccount<'info,TokenAccount>
+}
+
+impl<'info> Take<'info> {
+    pub fn take(&mut self)-> Result<()>{
+        let transfer_y_to_maker_accounts = TransferChecked {
+            from: self.taker_ata_y.to_account_info(),
+            mint: self.mint_y.to_account_info(),
+            to: self.maker_ata_y.to_account_info(),
+            authority: self.taker.to_account_info()
+        };
+
+        let transfer_x_to_taker_accounts = TransferChecked {
+            from: self.vault.to_account_info(),
+            mint: self.mint_x.to_account_info(),
+            to: self.taker_ata_x.to_account_info(),
+            authority: self.escrow.to_account_info()
+        };
+
+        let cpi_context_y_to_maker = CpiContext::new(
+            self.token_program.to_account_info(),
+            transfer_y_to_maker_accounts
+        );
+
+        transfer_checked(
+            cpi_context_y_to_maker,
+            self.escrow.receive,
+            self.mint_y.decimals
+        )?;
+
+        let cpi_context_x_to_taker = CpiContext::new(
+            self.token_program.to_account_info(),
+            transfer_x_to_taker_accounts
+        );
+
+        transfer_checked(
+            cpi_context_x_to_taker,
+            self.vault.to_account_info().lamports(),
+            self.mint_x.decimals
+        )?;
+
+        Ok(())
+    }
+}
+
+// Saw this error whilr building
+// Used 'claud' chat to find a solution
+// Using Box was it's suggestion
+
+// Error: Function _ZN149_$LT$anchor_escrow_q1_2026..instructions..
+// take..Take$u20$as$u20$anchor_lang..Accounts$LT$anchor_escrow_q1_2026..
+// instructions..take..TakeBumps$GT$$GT$12try_accounts17h345c22ed7bcc976eE 
+// Stack offset of 4456 exceeded max offset of 4096 by 360 bytes,
+// please minimize large stack variables.
+// Estimated function frame size: 4800 bytes.
+// Exceeding the maximum stack offset may cause undefined behavior during execution.
