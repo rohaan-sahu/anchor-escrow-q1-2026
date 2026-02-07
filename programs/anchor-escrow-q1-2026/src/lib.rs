@@ -26,9 +26,9 @@ pub mod anchor_escrow_q1_2026 {
         Ok(())
     }
 
-    pub fn refund(ctx: Context<Refund>,seed: u64) -> Result<()> {
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
 
-        ctx.accounts.refund(seed)?;
+        ctx.accounts.refund()?;
 
         Ok(())
     }

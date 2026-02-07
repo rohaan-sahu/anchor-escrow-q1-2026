@@ -12,7 +12,6 @@ use anchor_spl::{
 use crate::state::Escrow;
 
 #[derive(Accounts)]
-#[instruction(seed: u64)]
 pub struct Refund<'info> {
     pub system_program: Program<'info,System>,
     pub token_program: Interface<'info, TokenInterface>,
@@ -40,7 +39,7 @@ pub struct Refund<'info> {
         seeds = [
             b"escrow",
             maker.key().as_ref(),
-            seed.to_le_bytes().as_ref()
+            &escrow.seed.to_le_bytes()
             ],
         bump = escrow.bump,
     )]
@@ -57,7 +56,7 @@ pub struct Refund<'info> {
 }
 
 impl<'info> Refund<'info> {
-    pub fn refund(&mut self, seed: u64 )-> Result<()>{
+    pub fn refund(&mut self )-> Result<()>{
 
         let transfer_accounts = TransferChecked {
             from: self.vault.to_account_info(),
@@ -66,11 +65,11 @@ impl<'info> Refund<'info> {
             authority: self.escrow.to_account_info()
         };
 
-        let salt_seed_bytes = seed.to_le_bytes();
+        let salt_seed_bytes:&[u8] = &self.escrow.seed.to_le_bytes();
         let cpi_seed_signer:&[&[&[u8]]] = &[&[
             b"escrow",
             self.maker.to_account_info().key.as_ref(),
-            salt_seed_bytes.as_ref(),
+            salt_seed_bytes,
             &[self.escrow.bump]
         ]];
 

@@ -152,7 +152,7 @@ describe("anchor_escrow_q1_2026", () => {
 
     // Refund
     await program.methods
-      .refund(seed1)
+      .refund()
       .accountsStrict({
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -175,14 +175,13 @@ describe("anchor_escrow_q1_2026", () => {
     
   });
 
-  /*
   it("Makes and takes the escrow", async () => {
     const seed2 = new anchor.BN(2222);
-    [escrowPda, escrowBump] = anchor.web3.PublicKey.findProgramAddressSync(
+    const [escrowPda, escrowBump] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("escrow"), maker.publicKey.toBuffer(), seed2.toArrayLike(Buffer, "le", 8)],
       program.programId
     );
-    vault = getAssociatedTokenAddressSync(mintX, escrowPda, true);
+    const vault = getAssociatedTokenAddressSync(mintX, escrowPda, true);
 
     // Make (again for take path)
     await program.methods
@@ -239,5 +238,4 @@ describe("anchor_escrow_q1_2026", () => {
     const makerBalanceB = (await provider.connection.getTokenAccountBalance(makerAtaY)).value.uiAmount;
     //assert.strictEqual(makerBalanceB,receiveAmount);
   });
-  */
 });

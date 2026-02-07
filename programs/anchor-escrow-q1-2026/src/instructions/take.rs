@@ -21,6 +21,7 @@ pub struct Take<'info> {
 
     #[account(mut)]
     pub taker: Signer<'info>,
+    #[account(mut)]
     pub maker: SystemAccount<'info>,
 
     #[account(mint::token_program = token_program)]
@@ -65,16 +66,19 @@ pub struct Take<'info> {
 
 
     #[account(
+        mut,
+        close = maker,
         seeds = [
             b"escrow",
             maker.key().as_ref(),
-            seed.to_le_bytes().as_ref()
+            &escrow.seed.to_le_bytes()
             ],
         bump = escrow.bump,
     )]
     pub escrow: Account<'info,Escrow>,
 
     #[account(
+        mut,
         associated_token::mint = mint_x,
         associated_token::authority = escrow,
         associated_token::token_program = token_program,
@@ -109,9 +113,18 @@ impl<'info> Take<'info> {
             self.mint_y.decimals
         )?;
 
-        let cpi_context_x_to_taker = CpiContext::new(
+        let salt_seed_bytes:&[u8] = &self.escrow.seed.to_le_bytes();
+        let cpi_seed_signer:&[&[&[u8]]] = &[&[
+            b"escrow",
+            self.maker.to_account_info().key.as_ref(),
+            salt_seed_bytes,
+            &[self.escrow.bump]
+        ]];
+
+        let cpi_context_x_to_taker = CpiContext::new_with_signer(
             self.token_program.to_account_info(),
-            transfer_x_to_taker_accounts
+            transfer_x_to_taker_accounts,
+            cpi_seed_signer
         );
 
         transfer_checked(
