@@ -65,11 +65,11 @@ impl<'info> Refund<'info> {
             authority: self.escrow.to_account_info()
         };
 
-        let salt_seed_bytes:&[u8] = &self.escrow.seed.to_le_bytes();
+        let salt_seed_bytes:[u8;8] = self.escrow.seed.to_le_bytes();
         let cpi_seed_signer:&[&[&[u8]]] = &[&[
             b"escrow",
             self.maker.to_account_info().key.as_ref(),
-            salt_seed_bytes,
+            &salt_seed_bytes,
             &[self.escrow.bump]
         ]];
 

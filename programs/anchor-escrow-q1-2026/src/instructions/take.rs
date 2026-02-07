@@ -13,7 +13,6 @@ use anchor_spl::{
 use crate::Escrow;
 
 #[derive(Accounts)]
-#[instruction(seed: u64)]
 pub struct Take<'info> {
     pub system_program: Program<'info,System>,
     pub associated_token_program: Program<'info,AssociatedToken>,
@@ -30,39 +29,42 @@ pub struct Take<'info> {
     pub mint_y: InterfaceAccount<'info,Mint>,
 
 
+	// Enclosing PDAs inside Box<>. Aparently the side of this instruct is large and 'Box<>' mitigates it.
+	// My high-level  overview is that , 'Box<>' is a smart pointer, which can store teh programs somewhere
+	//  else and simply point to then.
     #[account(
         mut,
         associated_token::mint = mint_x,
-        associated_token::authority = maker,
+        associated_token::authority = maker,						// This was incorrectly set to 'taker'
         associated_token::token_program = token_program
     )]
-    pub maker_ata_x: InterfaceAccount<'info, TokenAccount>,
+    pub maker_ata_x: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
-        payer = taker,
+        payer = taker,                                  // Only 'taker' is the signer and the payer here. Putting 'maker' here is a likely candidate for causing "Access Violation" error.
         associated_token::mint = mint_x,
         associated_token::authority = taker,
         associated_token::token_program = token_program
     )]
-    pub taker_ata_x: InterfaceAccount<'info,TokenAccount>,
+    pub taker_ata_x: Box<InterfaceAccount<'info,TokenAccount>>,
 
     #[account(
         init_if_needed,
-        payer = taker,
+        payer = taker,                                  // Only 'taker' is the signer and the payer here. Putting 'maker' here is a likely candidate for causing "Access Violation" error.
         associated_token::mint = mint_y,
         associated_token::authority = maker,
         associated_token::token_program = token_program
     )]
-    pub maker_ata_y: InterfaceAccount<'info,TokenAccount>,
+    pub maker_ata_y: Box<InterfaceAccount<'info,TokenAccount>>,
 
     #[account(
         mut,
-        associated_token::mint = mint_x,
-        associated_token::authority = maker,
+        associated_token::mint = mint_y,                        // This was set to mint_x initially.
+        associated_token::authority = taker,                    // This was set to maker. That might have caused "Access violation"
         associated_token::token_program = token_program
     )]
-    pub taker_ata_y: InterfaceAccount<'info,TokenAccount>,
+    pub taker_ata_y: Box<InterfaceAccount<'info,TokenAccount>>,
 
 
     #[account(
@@ -75,7 +77,7 @@ pub struct Take<'info> {
             ],
         bump = escrow.bump,
     )]
-    pub escrow: Account<'info,Escrow>,
+    pub escrow: Box<Account<'info,Escrow>>,
 
     #[account(
         mut,
@@ -83,7 +85,7 @@ pub struct Take<'info> {
         associated_token::authority = escrow,
         associated_token::token_program = token_program,
     )]
-    pub vault: InterfaceAccount<'info,TokenAccount>
+    pub vault: Box<InterfaceAccount<'info,TokenAccount>>
 }
 
 impl<'info> Take<'info> {
@@ -113,12 +115,18 @@ impl<'info> Take<'info> {
             self.mint_y.decimals
         )?;
 
-        let salt_seed_bytes:&[u8] = &self.escrow.seed.to_le_bytes();
+        // This holds the 'seed' evev after 'Escrow' closes.
+        // 'bump' as well
+        // Hence it might help avert the 'Access violation' error.
+        let seed = self.escrow.seed;
+        let bump = self.escrow.bump;
+
+        let salt_seed_bytes:[u8;8] = seed.to_le_bytes();
         let cpi_seed_signer:&[&[&[u8]]] = &[&[
             b"escrow",
             self.maker.to_account_info().key.as_ref(),
-            salt_seed_bytes,
-            &[self.escrow.bump]
+            &salt_seed_bytes,
+            &[bump]
         ]];
 
         let cpi_context_x_to_taker = CpiContext::new_with_signer(
